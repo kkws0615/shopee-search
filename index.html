@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>熱門餐廳搜尋器 (自動完成版)</title>
+    <title>熱門餐廳搜尋器 (自訂距離版)</title>
     <style>
         /* CSS 樣式 */
         body, html { height: 100%; margin: 0; font-family: 'Microsoft JhengHei', sans-serif; background: #f4f7f6; }
@@ -17,11 +17,32 @@
             background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             margin-bottom: 15px; flex-shrink: 0;
         }
-        .search-box { display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; font-size: 16px; border: 1px solid #ddd; border-radius: 8px; outline: none; }
-        input:focus { border-color: #4285F4; }
-        button { min-width: 80px; padding: 12px; font-size: 16px; background: #4285F4; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        
+        /* 搜尋列佈局調整 */
+        .search-box { display: flex; gap: 10px; flex-wrap: wrap; }
+        
+        /* 地點輸入框 */
+        input#address { 
+            flex: 2; /* 佔比較寬 */
+            min-width: 200px;
+            padding: 12px; font-size: 16px; border: 1px solid #ddd; border-radius: 8px; outline: none; 
+        }
+        input#address:focus { border-color: #4285F4; }
+
+        /* 距離選單 */
+        select#radius {
+            flex: 0 0 auto; /* 不縮放，固定寬度 */
+            padding: 12px; font-size: 16px; border: 1px solid #ddd; border-radius: 8px; outline: none; background: white; cursor: pointer;
+        }
+        select#radius:focus { border-color: #4285F4; }
+
+        /* 搜尋按鈕 */
+        button { 
+            flex: 0 0 80px; 
+            padding: 12px; font-size: 16px; background: #4285F4; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; 
+        }
         button:hover { background: #3367D6; }
+
         #status { text-align: center; margin-top: 10px; font-size: 14px; color: #d32f2f; font-weight: bold; min-height: 20px; }
         .success-msg { color: #2e7d32 !important; }
 
@@ -46,6 +67,8 @@
             .content-wrapper { flex-direction: column; }
             #map-container { flex: none; height: 300px; width: 100%; }
             #list-container { flex: 1; width: 100%; }
+            .search-box { flex-direction: column; } /* 手機版垂直排列 */
+            input#address, select#radius, button { width: 100%; }
         }
     </style>
 </head>
@@ -53,9 +76,18 @@
 
 <div class="main-container">
     <div class="search-section">
-        <h2>🚀 熱門餐廳搜尋器 (自動完成版)</h2>
+        <h2>🚀 熱門餐廳搜尋器 (可自訂距離)</h2>
         <div class="search-box">
             <input type="text" id="address" placeholder="輸入地點 (例: 新光三越)">
+            
+            <select id="radius">
+                <option value="500">500公尺 (走路)</option>
+                <option value="1000">1公里 (附近)</option>
+                <option value="3000" selected>3公里 (標準)</option>
+                <option value="5000">5公里 (開車)</option>
+                <option value="10000">10公里 (廣域)</option>
+            </select>
+
             <button onclick="manualSearch()">搜尋</button>
         </div>
         <div id="status">地圖載入中，請稍候...</div>
@@ -83,7 +115,7 @@
     });
 
     let map;
-    let Place, AdvancedMarkerElement, Autocomplete; // 👈 增加 Autocomplete
+    let Place, AdvancedMarkerElement, Autocomplete;
     let currentMarkers = [];
 
     async function initApp() {
@@ -97,7 +129,7 @@
             const markerLib = await google.maps.importLibrary("marker");
 
             Place = placesLib.Place;
-            Autocomplete = placesLib.Autocomplete; // 👈 取得自動完成工具
+            Autocomplete = placesLib.Autocomplete;
             AdvancedMarkerElement = markerLib.AdvancedMarkerElement;
 
             map = new mapsLib.Map(document.getElementById("map"), {
@@ -107,7 +139,6 @@
                 mapTypeControl: false
             });
 
-            // 🔥 設定搜尋框的自動完成 🔥
             initAutocomplete();
 
             document.getElementById('status').innerText = "✅ 搜尋框已就緒，請嘗試輸入地點";
@@ -120,47 +151,36 @@
     }
     initApp();
 
-    // 初始化自動完成功能
     function initAutocomplete() {
         const input = document.getElementById("address");
-        // 設定自動完成選項
         const autocomplete = new Autocomplete(input, {
-            fields: ["geometry", "name", "formatted_address"], // 我們需要的資料
-            types: ["establishment", "geocode"], // 搜尋店家或地址
-            componentRestrictions: { country: "tw" } // 限制在台灣搜尋 (可選)
+            fields: ["geometry", "name", "formatted_address"],
+            types: ["establishment", "geocode"],
+            componentRestrictions: { country: "tw" }
         });
 
-        // 🔥 監聽：當使用者選擇選單項目時 🔥
         autocomplete.addListener("place_changed", () => {
             const place = autocomplete.getPlace();
 
             if (!place.geometry || !place.geometry.location) {
-                // 如果使用者輸入了文字但沒選選單，就按了 Enter
                 window.alert("請從下拉選單中選擇一個地點，或點擊搜尋按鈕。");
                 return;
             }
-
-            // 直接使用選單回傳的地點進行搜尋
             const locationName = place.name;
             const locationCoords = place.geometry.location;
             
-            // 執行餐廳搜尋
             executeRestaurantSearch(locationCoords, locationName);
         });
     }
 
-    // 清除標記
     function clearMarkers() {
         currentMarkers.forEach(m => m.map = null);
         currentMarkers = [];
     }
 
-    // 這是原本的按鈕搜尋 (手動搜尋)
     async function manualSearch() {
         const query = document.getElementById('address').value;
         if (!query) return alert("請輸入地點！");
-        
-        // 如果使用者沒選選單，直接按搜尋，我們用舊方法找地點
         if (!Place) return;
         
         document.getElementById('status').innerText = "🔍 正在搜尋地點...";
@@ -173,7 +193,6 @@
 
             if (!places || places.length === 0) throw new Error("找不到該地點");
 
-            // 找最熱門的
             places.sort((a, b) => (b.userRatingCount || 0) - (a.userRatingCount || 0));
             const bestLocation = places[0];
             
@@ -184,53 +203,58 @@
         }
     }
 
-    // 抽出共同的搜尋邏輯：搜尋周邊餐廳
     async function executeRestaurantSearch(locationCoords, locationName) {
         const status = document.getElementById('status');
         const list = document.getElementById('list');
+        
+        // 🔥 1. 取得使用者選擇的距離 🔥
+        const radiusSelect = document.getElementById('radius');
+        const radius = parseInt(radiusSelect.value); // 轉成數字 (公尺)
+        const radiusText = radiusSelect.options[radiusSelect.selectedIndex].text; // 取得選單文字 (例如: 1公里)
 
         status.className = "";
-        status.innerHTML = `📍 已鎖定：<b>${locationName}</b><br>🔍 正在搜尋 3 公里內熱門餐廳...`;
+        status.innerHTML = `📍 已鎖定：<b>${locationName}</b><br>🔍 正在搜尋 <b>${radiusText}</b> 內的熱門餐廳...`;
         list.innerHTML = '<li style="justify-content: center; padding: 30px;">搜尋中...</li>';
         
         clearMarkers();
 
-        // 移動地圖
+        // 根據距離調整地圖縮放層級 (距離越遠，地圖縮越小)
+        let zoomLevel = 15;
+        if (radius <= 500) zoomLevel = 16;
+        else if (radius >= 5000) zoomLevel = 13;
+        else if (radius >= 10000) zoomLevel = 12;
+
         map.setCenter(locationCoords);
-        map.setZoom(15);
+        map.setZoom(zoomLevel);
         
-        // 標記中心點
         const centerMarker = new AdvancedMarkerElement({
             map: map, position: locationCoords, title: "中心點"
         });
         currentMarkers.push(centerMarker);
 
         try {
-            // 搜尋餐廳
             const { places: restaurantResults } = await Place.searchNearby({
                 fields: ['displayName', 'location', 'rating', 'userRatingCount', 'formattedAddress'],
                 locationRestriction: {
                     center: locationCoords,
-                    radius: 3000
+                    radius: radius // 🔥 2. 使用自訂距離 🔥
                 },
                 includedPrimaryTypes: ['restaurant'],
                 maxResultCount: 20
             });
 
             if (!restaurantResults || restaurantResults.length === 0) {
-                status.innerText = "⚠️ 附近找不到餐廳";
-                list.innerHTML = '<li style="justify-content: center;">附近無資料</li>';
+                status.innerText = `⚠️ ${radiusText} 內找不到餐廳`;
+                list.innerHTML = '<li style="justify-content: center;">範圍內無資料</li>';
                 return;
             }
 
-            // 排序
             restaurantResults.sort((a, b) => (b.userRatingCount || 0) - (a.userRatingCount || 0));
 
-            status.innerHTML = `✅ 完成！${locationName} 周邊找到 ${restaurantResults.length} 間熱門餐廳`;
+            status.innerHTML = `✅ 完成！${locationName} <b>${radiusText}</b> 內找到 ${restaurantResults.length} 間熱門餐廳`;
             status.className = "success-msg";
             list.innerHTML = "";
 
-            // 產生列表
             restaurantResults.forEach((place, index) => {
                 const name = place.displayName;
                 const rating = place.rating ? place.rating : "N/A";
