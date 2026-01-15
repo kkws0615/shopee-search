@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>熱門餐廳搜尋器 (2026 新版 API)</title>
+    <title>熱門餐廳搜尋器 (官方標準載入版)</title>
     <style>
-        /* CSS 樣式維持不變，依然是左圖右列表 */
+        /* CSS 樣式維持不變 */
         body, html { height: 100%; margin: 0; font-family: 'Microsoft JhengHei', sans-serif; background: #f4f7f6; }
         .main-container {
             max-width: 1200px; margin: 0 auto; padding: 20px; height: calc(100vh - 40px);
@@ -53,12 +53,12 @@
 
 <div class="main-container">
     <div class="search-section">
-        <h2>🚀 熱門餐廳搜尋器 (新版核心)</h2>
+        <h2>🚀 熱門餐廳搜尋器 (v3.0 最終修正版)</h2>
         <div class="search-box">
             <input type="text" id="address" placeholder="輸入地點 (例: 新光三越, 台北車站)">
             <button onclick="runSearch()">搜尋</button>
         </div>
-        <div id="status">請輸入地點開始搜尋</div>
+        <div id="status">地圖載入中，請稍候...</div>
     </div>
 
     <div class="content-wrapper">
@@ -74,117 +74,112 @@
 <script>
     // 👇👇👇 請填入你的 API Key 👇👇👇
     const MY_API_KEY = "AIzaSyB5WzhHwuf3uUEJ6iNQBovL7U07E2eGXAg"; 
+    // 👆👆👆 確保這裡沒有多餘的空格 👆👆👆
 </script>
 
 <script>
-    // 1. 動態載入 Script，加入 loading=async 解決效能警告
-    (function(d, s, id){
-        if(!MY_API_KEY || MY_API_KEY.includes("在此處")) { alert("⚠️ 請填入正確的 API Key"); return; }
-        var js, fjs = d.getElementsByTagName(s)[0];
-        if (d.getElementById(id)) {return;}
-        js = d.createElement(s); js.id = id;
-        js.async = true; // 重要：非同步載入
-        js.src = `https://maps.googleapis.com/maps/api/js?key=${MY_API_KEY}&loading=async&libraries=places,marker&language=zh-TW`;
-        fjs.parentNode.insertBefore(js, fjs);
-        js.onload = initApp; // 載入完成後初始化
-    }(document, 'script', 'google-maps-js'));
+    // ⚠️ 這是 Google 官方標準 Loader (解決 importLibrary is not a function 問題)
+    // 請勿修改這段看似亂碼的程式碼
+    (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+        key: MY_API_KEY,
+        v: "weekly" // 🔥 強制使用最新版，解決錯誤的關鍵
+    });
 
     let map;
-    let Place, AdvancedMarkerElement; // 新版 API 類別
+    let Place, AdvancedMarkerElement;
 
-    // 初始化應用程式
+    // 啟動程式
     async function initApp() {
-        console.log("正在載入 Google Maps Libraries...");
-        
-        // 使用 importLibrary 載入新版模組
-        const mapsLib = await google.maps.importLibrary("maps");
-        const placesLib = await google.maps.importLibrary("places");
-        const markerLib = await google.maps.importLibrary("marker");
+        if(!MY_API_KEY || MY_API_KEY.includes("在此處")) {
+            document.getElementById('status').innerText = "⚠️ 錯誤：請填入 API Key";
+            return;
+        }
 
-        Place = placesLib.Place;
-        AdvancedMarkerElement = markerLib.AdvancedMarkerElement;
+        try {
+            console.log("正在載入地圖庫...");
+            const mapsLib = await google.maps.importLibrary("maps");
+            const placesLib = await google.maps.importLibrary("places");
+            const markerLib = await google.maps.importLibrary("marker");
 
-        // 初始化地圖 (必須加入 mapId，因為 AdvancedMarkerElement 需要)
-        // DEMO_MAP_ID 是 Google 提供的測試用 ID，正式上線建議去後台申請一個
-        map = new mapsLib.Map(document.getElementById("map"), {
-            center: { lat: 25.0330, lng: 121.5654 },
-            zoom: 14,
-            mapId: "DEMO_MAP_ID", 
-            mapTypeControl: false
-        });
-        
-        console.log("地圖初始化完成");
+            Place = placesLib.Place;
+            AdvancedMarkerElement = markerLib.AdvancedMarkerElement;
+
+            map = new mapsLib.Map(document.getElementById("map"), {
+                center: { lat: 25.0330, lng: 121.5654 },
+                zoom: 14,
+                mapId: "DEMO_MAP_ID", // Google 提供的測試 ID
+                mapTypeControl: false
+            });
+
+            document.getElementById('status').innerText = "✅ 地圖就緒，請輸入地點開始搜尋";
+            document.getElementById('status').classList.add("success-msg");
+            
+        } catch (error) {
+            console.error("初始化失敗:", error);
+            document.getElementById('status').innerText = `❌ 初始化失敗: ${error.message}`;
+            if(error.message.includes("is not a function")) {
+                 alert("API 載入版本過舊，請檢查網路或清除快取。");
+            }
+        }
     }
+
+    // 這裡我們直接呼叫 initApp，因為 Loader 會處理 Promise
+    initApp();
 
     let currentMarkers = [];
 
-    // 清除標記
     function clearMarkers() {
         currentMarkers.forEach(m => m.map = null);
         currentMarkers = [];
     }
 
-    // 主搜尋函式
     async function runSearch() {
         const query = document.getElementById('address').value;
         const status = document.getElementById('status');
         const list = document.getElementById('list');
 
         if (!query) return alert("請輸入地點！");
-        if (!Place) return alert("地圖尚未載入完成，請稍候...");
+        if (!Place) return alert("地圖尚未載入完成，請檢查 API Key 是否正確。");
 
         status.className = "";
-        status.innerHTML = "🔍 步驟 1/2: 正在定位...";
+        status.innerHTML = "🔍 步驟 1/2: 正在定位地點...";
         list.innerHTML = '<li style="justify-content: center; padding: 30px;">搜尋中...</li>';
         clearMarkers();
 
         try {
-            // --- 步驟 1: 使用新版 searchByText 找地點 ---
-            // Request 物件
-            const textSearchRequest = {
+            // 1. 文字搜尋地點
+            const { places } = await Place.searchByText({
                 textQuery: query,
-                fields: ['displayName', 'location', 'userRatingCount', 'formattedAddress'], // 指定需要的欄位
-            };
+                fields: ['displayName', 'location', 'userRatingCount', 'formattedAddress']
+            });
 
-            const { places } = await Place.searchByText(textSearchRequest);
+            if (!places || places.length === 0) throw new Error("找不到該地點");
 
-            if (!places || places.length === 0) {
-                throw new Error("找不到該地點");
-            }
-
-            console.log("找到地點:", places);
-
-            // 排序：評論數多 -> 少
+            // 依評論數排序，取最高者
             places.sort((a, b) => (b.userRatingCount || 0) - (a.userRatingCount || 0));
-            
             const bestLocation = places[0];
             const locationCoords = bestLocation.location;
-            
-            status.className = "success-msg";
-            status.innerHTML = `📍 已定位：<b>${bestLocation.displayName}</b><br>🔍 步驟 2/2: 搜尋 3km 內餐廳...`;
 
-            // 移動地圖
+            status.innerHTML = `📍 定位：<b>${bestLocation.displayName}</b><br>🔍 步驟 2/2: 搜尋 3km 內餐廳...`;
             map.setCenter(locationCoords);
             map.setZoom(15);
-            
+
             // 標記中心點
             const centerMarker = new AdvancedMarkerElement({
                 map: map,
                 position: locationCoords,
-                title: "搜尋中心"
+                title: "中心點"
             });
             currentMarkers.push(centerMarker);
 
-            // --- 步驟 2: 使用新版 searchNearby 找餐廳 ---
-            const nearbyRequest = {
+            // 2. 搜尋周邊餐廳
+            const { places: restaurantResults } = await Place.searchNearby({
                 fields: ['displayName', 'location', 'rating', 'userRatingCount', 'formattedAddress'],
                 location: locationCoords,
-                radius: 3000, // 3000 公尺
-                includedPrimaryTypes: ['restaurant'], // 新版分類寫法
-                maxResultCount: 20 // 限制回傳數量
-            };
-
-            const { places: restaurantResults } = await Place.searchNearby(nearbyRequest);
+                radius: 3000,
+                includedPrimaryTypes: ['restaurant'],
+                maxResultCount: 20
+            });
 
             if (!restaurantResults || restaurantResults.length === 0) {
                 status.innerText = "⚠️ 附近找不到餐廳";
@@ -192,69 +187,59 @@
                 return;
             }
 
-            // 排序：評論數多 -> 少
+            // 依評論數排序
             restaurantResults.sort((a, b) => (b.userRatingCount || 0) - (a.userRatingCount || 0));
 
             status.innerHTML = `✅ 完成！找到 ${restaurantResults.length} 間熱門餐廳`;
+            status.className = "success-msg";
             list.innerHTML = "";
 
             restaurantResults.forEach((place, index) => {
-                createListItem(place, index + 1);
+                const name = place.displayName;
+                const rating = place.rating ? place.rating : "N/A";
+                const reviews = place.userRatingCount ? place.userRatingCount : 0;
+                const address = place.formattedAddress || "";
+                
+                const rankClass = (index + 1) <= 3 ? "rank top-3" : "rank";
+
+                const item = document.createElement('li');
+                item.innerHTML = `
+                    <div class="${rankClass}">${index + 1}</div>
+                    <div class="info">
+                        <h3>${name} <span style="font-size:0.8em; color:#fbbc04;">★${rating}</span></h3>
+                        <p>${address}</p>
+                        <div class="meta-tag">🔥 ${reviews.toLocaleString()} 則評論</div>
+                    </div>
+                `;
+                item.addEventListener('click', () => {
+                    map.setCenter(place.location);
+                    map.setZoom(17);
+                });
+                list.appendChild(item);
+
+                // 地圖標記 (前20名)
+                if (index < 20) {
+                    const pinContent = document.createElement("div");
+                    pinContent.className = rankClass;
+                    pinContent.textContent = index + 1;
+
+                    const marker = new AdvancedMarkerElement({
+                        map: map,
+                        position: place.location,
+                        title: name,
+                        content: pinContent,
+                        zIndex: 100 - index
+                    });
+                    marker.addListener('click', () => item.click());
+                    currentMarkers.push(marker);
+                }
             });
 
         } catch (error) {
-            console.error("搜尋錯誤:", error);
+            console.error(error);
             status.className = "";
-            status.innerHTML = `❌ 發生錯誤: ${error.message}`;
-            list.innerHTML = `<li style="justify-content: center; color: red;">錯誤: ${error.message}</li>`;
-        }
-    }
-
-    function createListItem(place, rank) {
-        const list = document.getElementById('list');
-        const item = document.createElement('li');
-        
-        // 新版 API 屬性名稱不同 (displayName, userRatingCount)
-        const name = place.displayName; 
-        const rating = place.rating ? place.rating : "N/A";
-        const reviews = place.userRatingCount ? place.userRatingCount : 0;
-        const address = place.formattedAddress || "";
-        
-        const rankClass = rank <= 3 ? "rank top-3" : "rank";
-
-        item.innerHTML = `
-            <div class="${rankClass}">${rank}</div>
-            <div class="info">
-                <h3>${name} <span style="font-size:0.8em; color:#fbbc04;">★${rating}</span></h3>
-                <p>${address}</p>
-                <div class="meta-tag">🔥 ${reviews.toLocaleString()} 則評論</div>
-            </div>
-        `;
-
-        item.addEventListener('click', () => {
-            map.setCenter(place.location);
-            map.setZoom(17);
-        });
-
-        list.appendChild(item);
-
-        // 地圖標記
-        if (rank <= 20) {
-            // 製作有數字的標記內容
-            const pinElement = document.createElement('div');
-            pinElement.className = rank <= 3 ? "rank top-3" : "rank";
-            pinElement.textContent = rank;
-
-            const marker = new AdvancedMarkerElement({
-                map: map,
-                position: place.location,
-                title: name,
-                content: pinElement, // 使用自訂 HTML 元素當標記
-                zIndex: 100 - rank
-            });
-            
-            marker.addListener('click', () => item.click());
-            currentMarkers.push(marker);
+            status.innerHTML = `❌ 錯誤: ${error.message}`;
+            list.innerHTML = `<li style="justify-content: center; color: red;">${error.message}</li>`;
         }
     }
 </script>
