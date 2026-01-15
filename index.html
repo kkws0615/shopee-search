@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>熱門餐廳搜尋器 (v3.3 最終修正版)</title>
+    <title>熱門餐廳搜尋器 (自動完成版)</title>
     <style>
-        /* CSS 樣式維持不變 */
+        /* CSS 樣式 */
         body, html { height: 100%; margin: 0; font-family: 'Microsoft JhengHei', sans-serif; background: #f4f7f6; }
         .main-container {
             max-width: 1200px; margin: 0 auto; padding: 20px; height: calc(100vh - 40px);
@@ -53,10 +53,10 @@
 
 <div class="main-container">
     <div class="search-section">
-        <h2>🚀 熱門餐廳搜尋器 (v3.3 完美版)</h2>
+        <h2>🚀 熱門餐廳搜尋器 (自動完成版)</h2>
         <div class="search-box">
-            <input type="text" id="address" placeholder="輸入地點 (例: 新光三越, 台北車站)">
-            <button onclick="runSearch()">搜尋</button>
+            <input type="text" id="address" placeholder="輸入地點 (例: 新光三越)">
+            <button onclick="manualSearch()">搜尋</button>
         </div>
         <div id="status">地圖載入中，請稍候...</div>
     </div>
@@ -65,7 +65,7 @@
         <div id="map-container"><div id="map"></div></div>
         <div id="list-container">
             <ul id="list">
-                <li style="color:#666; justify-content: center; padding: 30px;">結果將顯示於此</li>
+                <li style="color:#666; justify-content: center; padding: 30px;">請輸入地點或從選單選擇</li>
             </ul>
         </div>
     </div>
@@ -77,14 +77,14 @@
 </script>
 
 <script>
-    // 官方 Loader
     (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
         key: MY_API_KEY,
         v: "weekly"
     });
 
     let map;
-    let Place, AdvancedMarkerElement;
+    let Place, AdvancedMarkerElement, Autocomplete; // 👈 增加 Autocomplete
+    let currentMarkers = [];
 
     async function initApp() {
         if(!MY_API_KEY || MY_API_KEY.includes("在此處")) {
@@ -97,6 +97,7 @@
             const markerLib = await google.maps.importLibrary("marker");
 
             Place = placesLib.Place;
+            Autocomplete = placesLib.Autocomplete; // 👈 取得自動完成工具
             AdvancedMarkerElement = markerLib.AdvancedMarkerElement;
 
             map = new mapsLib.Map(document.getElementById("map"), {
@@ -105,8 +106,13 @@
                 mapId: "DEMO_MAP_ID",
                 mapTypeControl: false
             });
-            document.getElementById('status').innerText = "✅ 地圖就緒，請輸入地點開始搜尋";
+
+            // 🔥 設定搜尋框的自動完成 🔥
+            initAutocomplete();
+
+            document.getElementById('status').innerText = "✅ 搜尋框已就緒，請嘗試輸入地點";
             document.getElementById('status').classList.add("success-msg");
+
         } catch (error) {
             console.error("初始化失敗:", error);
             document.getElementById('status').innerText = `❌ 初始化失敗`;
@@ -114,52 +120,95 @@
     }
     initApp();
 
-    let currentMarkers = [];
+    // 初始化自動完成功能
+    function initAutocomplete() {
+        const input = document.getElementById("address");
+        // 設定自動完成選項
+        const autocomplete = new Autocomplete(input, {
+            fields: ["geometry", "name", "formatted_address"], // 我們需要的資料
+            types: ["establishment", "geocode"], // 搜尋店家或地址
+            componentRestrictions: { country: "tw" } // 限制在台灣搜尋 (可選)
+        });
+
+        // 🔥 監聽：當使用者選擇選單項目時 🔥
+        autocomplete.addListener("place_changed", () => {
+            const place = autocomplete.getPlace();
+
+            if (!place.geometry || !place.geometry.location) {
+                // 如果使用者輸入了文字但沒選選單，就按了 Enter
+                window.alert("請從下拉選單中選擇一個地點，或點擊搜尋按鈕。");
+                return;
+            }
+
+            // 直接使用選單回傳的地點進行搜尋
+            const locationName = place.name;
+            const locationCoords = place.geometry.location;
+            
+            // 執行餐廳搜尋
+            executeRestaurantSearch(locationCoords, locationName);
+        });
+    }
+
+    // 清除標記
     function clearMarkers() {
         currentMarkers.forEach(m => m.map = null);
         currentMarkers = [];
     }
 
-    async function runSearch() {
+    // 這是原本的按鈕搜尋 (手動搜尋)
+    async function manualSearch() {
         const query = document.getElementById('address').value;
-        const status = document.getElementById('status');
-        const list = document.getElementById('list');
-
         if (!query) return alert("請輸入地點！");
-        if (!Place) return alert("地圖尚未載入完成");
-
-        status.className = "";
-        status.innerHTML = "🔍 步驟 1/2: 正在定位...";
-        list.innerHTML = '<li style="justify-content: center; padding: 30px;">搜尋中...</li>';
-        clearMarkers();
-
+        
+        // 如果使用者沒選選單，直接按搜尋，我們用舊方法找地點
+        if (!Place) return;
+        
+        document.getElementById('status').innerText = "🔍 正在搜尋地點...";
+        
         try {
-            // 1. 定位地點
             const { places } = await Place.searchByText({
                 textQuery: query,
-                fields: ['displayName', 'location', 'userRatingCount', 'formattedAddress']
+                fields: ['displayName', 'location', 'userRatingCount']
             });
 
             if (!places || places.length === 0) throw new Error("找不到該地點");
 
+            // 找最熱門的
             places.sort((a, b) => (b.userRatingCount || 0) - (a.userRatingCount || 0));
             const bestLocation = places[0];
-            const locationCoords = bestLocation.location;
+            
+            executeRestaurantSearch(bestLocation.location, bestLocation.displayName);
 
-            status.innerHTML = `📍 定位：<b>${bestLocation.displayName}</b><br>🔍 步驟 2/2: 搜尋 3km 內餐廳...`;
-            map.setCenter(locationCoords);
-            map.setZoom(15);
+        } catch (error) {
+            alert("找不到地點: " + query);
+        }
+    }
 
-            const centerMarker = new AdvancedMarkerElement({
-                map: map, position: locationCoords, title: "中心點"
-            });
-            currentMarkers.push(centerMarker);
+    // 抽出共同的搜尋邏輯：搜尋周邊餐廳
+    async function executeRestaurantSearch(locationCoords, locationName) {
+        const status = document.getElementById('status');
+        const list = document.getElementById('list');
 
-            // 2. 搜尋周邊餐廳 (🔥 修正點在此 🔥)
-            // 不使用 'circle' 包裹，直接傳入 center 和 radius
+        status.className = "";
+        status.innerHTML = `📍 已鎖定：<b>${locationName}</b><br>🔍 正在搜尋 3 公里內熱門餐廳...`;
+        list.innerHTML = '<li style="justify-content: center; padding: 30px;">搜尋中...</li>';
+        
+        clearMarkers();
+
+        // 移動地圖
+        map.setCenter(locationCoords);
+        map.setZoom(15);
+        
+        // 標記中心點
+        const centerMarker = new AdvancedMarkerElement({
+            map: map, position: locationCoords, title: "中心點"
+        });
+        currentMarkers.push(centerMarker);
+
+        try {
+            // 搜尋餐廳
             const { places: restaurantResults } = await Place.searchNearby({
                 fields: ['displayName', 'location', 'rating', 'userRatingCount', 'formattedAddress'],
-                // 👇 正確寫法：直接給物件 👇
                 locationRestriction: {
                     center: locationCoords,
                     radius: 3000
@@ -174,11 +223,14 @@
                 return;
             }
 
+            // 排序
             restaurantResults.sort((a, b) => (b.userRatingCount || 0) - (a.userRatingCount || 0));
-            status.innerHTML = `✅ 完成！找到 ${restaurantResults.length} 間熱門餐廳`;
+
+            status.innerHTML = `✅ 完成！${locationName} 周邊找到 ${restaurantResults.length} 間熱門餐廳`;
             status.className = "success-msg";
             list.innerHTML = "";
 
+            // 產生列表
             restaurantResults.forEach((place, index) => {
                 const name = place.displayName;
                 const rating = place.rating ? place.rating : "N/A";
@@ -216,8 +268,7 @@
 
         } catch (error) {
             console.error(error);
-            status.className = "";
-            status.innerHTML = `❌ 錯誤: ${error.message}`;
+            status.innerText = `❌ 搜尋錯誤: ${error.message}`;
             list.innerHTML = `<li style="justify-content: center; color: red;">${error.message}</li>`;
         }
     }
