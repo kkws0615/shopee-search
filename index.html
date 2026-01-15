@@ -2,122 +2,179 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>我的美食雷達</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的美食雷達 (智慧搜尋版)</title>
     <style>
-        /* 這裡是網頁的化妝師 (CSS)，設定外觀 */
-        body { font-family: sans-serif; padding: 20px; background: #f0f2f5; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        input { width: 70%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
-        button { width: 25%; padding: 10px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        #map { width: 100%; height: 300px; margin-top: 20px; border-radius: 5px; display:none; }
-        ul { list-style: none; padding: 0; }
-        li { background: #fff; border-bottom: 1px solid #eee; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .rating { background: #ffc107; padding: 5px 10px; border-radius: 15px; font-weight: bold; color: #333; }
-        .info h3 { margin: 0 0 5px; font-size: 18px; }
-        .info p { margin: 0; color: #666; font-size: 14px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #f0f2f5; margin: 0; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; margin-bottom: 20px; }
+        
+        .search-box { display: flex; gap: 10px; }
+        input { flex: 1; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
+        input:focus { border-color: #4285F4; }
+        button { width: 80px; padding: 12px; font-size: 16px; background: #4285F4; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #3367D6; }
+
+        #status { text-align: center; margin: 15px 0; font-size: 14px; color: #555; line-height: 1.5; }
+        
+        #map { width: 100%; height: 250px; margin-bottom: 20px; border-radius: 8px; display: none; }
+        
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { background: #fff; border-bottom: 1px solid #f0f0f0; padding: 15px; display: flex; align-items: flex-start; gap: 15px; transition: background 0.2s; }
+        li:hover { background: #f9f9f9; }
+        li:last-child { border-bottom: none; }
+
+        .score-box { 
+            background: #FFD700; color: #333; padding: 6px 10px; border-radius: 8px; 
+            font-weight: bold; min-width: 35px; text-align: center; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .info { flex: 1; }
+        .info h3 { margin: 0 0 5px; font-size: 17px; color: #202124; }
+        .info p { margin: 0; color: #5f6368; font-size: 13px; }
+        .meta { font-size: 12px; color: #1a73e8; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2 style="text-align:center">🔍 3公里內最強餐廳搜尋</h2>
-    <div style="display:flex; justify-content:space-between;">
-        <input type="text" id="address" placeholder="輸入地點 (例如: 台北101, 板橋車站)">
-        <button onclick="findFood()">搜尋</button>
+    <h2>🍔 智慧美食雷達</h2>
+    <div class="search-box">
+        <input type="text" id="address" placeholder="輸入模糊地點 (如: 大遠百, 巨城)">
+        <button onclick="findLocation()">搜尋</button>
     </div>
-    <div id="status" style="text-align:center; margin-top:10px; color:gray;"></div>
+    
+    <div id="status"></div>
     <div id="map"></div>
     <ul id="list"></ul>
 </div>
 
 <script>
-    // 👇 請將你的 API Key 貼在下面這兩個引號中間 👇
-    const MY_API_KEY = "AIzaSyB5WzhHwuf3uUEJ6iNQBovL7U07E2eGXAg"; 
+    // 👇👇👇 請將你的 API Key 貼在下方引號中 👇👇👇
+    const MY_API_KEY = "在此處貼上你的API_KEY"; 
+    // 👆👆👆 記得要換喔！ 👆👆👆
 </script>
 
 <script>
-    // 動態載入 Google Maps 腳本
+    // 動態載入 Google Maps
     function loadScript() {
-        if(MY_API_KEY === "在此處貼上你的API_KEY" || MY_API_KEY.length < 10) {
-            alert("⚠️ 錯誤：你忘記貼上 API Key 了！\n請打開檔案，找到 'MY_API_KEY' 處貼上。");
+        if(!MY_API_KEY || MY_API_KEY.includes("在此處")) {
+            alert("⚠️ 錯誤：請編輯檔案填入正確的 API Key！");
             return;
         }
         const script = document.createElement('script');
         script.src = `https://maps.googleapis.com/maps/api/js?key=${MY_API_KEY}&libraries=places&language=zh-TW`;
-        script.onload = () => console.log("Google Maps API Loaded");
+        script.onload = initMap; // 載入完成後先執行初始化
         document.head.appendChild(script);
     }
-    loadScript();
 
-    let map, service, geocoder;
+    let map, service;
 
-    function findFood() {
-        const address = document.getElementById('address').value;
+    // 初始化：先建立一個看不見的地圖，這樣才能使用 PlacesService
+    function initMap() {
+        const dummyCenter = { lat: 25.0330, lng: 121.5654 }; // 預設台北
+        map = new google.maps.Map(document.getElementById("map"), {
+            center: dummyCenter,
+            zoom: 15
+        });
+        service = new google.maps.places.PlacesService(map);
+    }
+
+    function findLocation() {
+        const query = document.getElementById('address').value;
         const status = document.getElementById('status');
         const list = document.getElementById('list');
         const mapDiv = document.getElementById('map');
 
-        if(!address) return alert("請輸入地點！");
+        if(!query) return alert("請輸入地點名稱！");
         
-        status.innerText = "📍 正在定位並搜尋中...";
+        status.innerHTML = "🔍 正在搜尋最相關的地點...";
         list.innerHTML = "";
         
-        if(!google || !google.maps) {
-            return alert("地圖 API 尚未載入完成，請檢查 API Key 是否正確。");
-        }
+        // 1. 使用 TextSearch 進行模糊搜尋
+        const request = {
+            query: query,
+            fields: ['name', 'geometry', 'user_ratings_total', 'formatted_address']
+        };
 
-        // 1. 把地址變座標
-        geocoder = new google.maps.Geocoder();
-        geocoder.geocode({ 'address': address }, function(results, statusText) {
-            if (statusText === 'OK') {
-                const location = results[0].geometry.location;
+        service.textSearch(request, (results, statusText) => {
+            if (statusText === google.maps.places.PlacesServiceStatus.OK && results.length > 0) {
                 
-                // 顯示地圖
+                // 🌟 關鍵邏輯：將搜尋結果依照「評論數 (user_ratings_total)」由多到少排序
+                // 這樣可以避免找到同名但沒人氣的小地標
+                results.sort((a, b) => (b.user_ratings_total || 0) - (a.user_ratings_total || 0));
+                
+                // 選出第一名 (評論最多的那個)
+                const bestMatch = results[0];
+                const location = bestMatch.geometry.location;
+
+                status.innerHTML = `📍 定位到：<b>${bestMatch.name}</b><br><small>${bestMatch.formatted_address}</small><br>包含 ${bestMatch.user_ratings_total || 0} 則評論，正在搜尋附近餐廳...`;
+                
+                // 顯示地圖並移動過去
                 mapDiv.style.display = "block";
-                map = new google.maps.Map(mapDiv, { center: location, zoom: 15 });
-                service = new google.maps.places.PlacesService(map);
-
-                // 2. 搜尋附近餐廳 (半徑 3000 公尺)
-                service.nearbySearch({
-                    location: location,
-                    radius: 3000,
-                    type: ['restaurant']
-                }, (results, status) => {
-                    if (status === google.maps.places.PlacesServiceStatus.OK) {
-                        status.innerText = `✅ 找到 ${results.length} 間餐廳，依評價排序：`;
-                        
-                        // 3. 排序：高分在上面
-                        results.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-
-                        // 4. 顯示結果
-                        results.forEach(place => {
-                            const item = document.createElement('li');
-                            const rating = place.rating ? place.rating : "無";
-                            item.innerHTML = `
-                                <div class="info">
-                                    <h3>${place.name}</h3>
-                                    <p>${place.vicinity}</p>
-                                </div>
-                                <div class="rating">★ ${rating}</div>
-                            `;
-                            list.appendChild(item);
-                            
-                            // 地圖上插旗子
-                            new google.maps.Marker({
-                                map: map, position: place.geometry.location, title: place.name
-                            });
-                        });
-                    } else {
-                        status.innerText = "❌ 附近找不到餐廳，或 API 發生錯誤。";
-                    }
+                map.setCenter(location);
+                new google.maps.Marker({
+                    map: map,
+                    position: location,
+                    title: "搜尋中心"
                 });
+
+                // 2. 接著搜尋附近餐廳 (3公里)
+                searchNearbyRestaurants(location);
+
             } else {
-                alert('找不到這個地點，請試試看別的關鍵字。錯誤碼: ' + statusText);
-                status.innerText = "";
+                status.innerText = "❌ 找不到相關地點，請換個關鍵字試試。";
             }
         });
     }
+
+    function searchNearbyRestaurants(location) {
+        const list = document.getElementById('list');
+        
+        service.nearbySearch({
+            location: location,
+            radius: 3000,
+            type: ['restaurant']
+        }, (results, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                // 排序：評價高 -> 低
+                results.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+
+                results.forEach(place => {
+                    const item = document.createElement('li');
+                    const rating = place.rating ? place.rating : "N/A";
+                    const reviews = place.user_ratings_total ? `(${place.user_ratings_total})` : "";
+                    
+                    item.innerHTML = `
+                        <div class="score-box">${rating}</div>
+                        <div class="info">
+                            <h3>${place.name}</h3>
+                            <p>${place.vicinity}</p>
+                            <div class="meta">評論數: ${reviews}</div>
+                        </div>
+                    `;
+                    // 點擊列表移動地圖
+                    item.addEventListener('click', () => {
+                        map.setCenter(place.geometry.location);
+                        map.setZoom(17);
+                    });
+
+                    list.appendChild(item);
+
+                    // 地圖標記
+                    new google.maps.Marker({
+                        map: map,
+                        position: place.geometry.location,
+                        title: place.name
+                    });
+                });
+            } else {
+                document.getElementById('status').innerText += "<br>但附近找不到餐廳。";
+            }
+        });
+    }
+
+    // 啟動腳本
+    loadScript();
 </script>
 
 </body>
