@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>熱門餐廳搜尋器 (v3.2 Bounds修正版)</title>
+    <title>熱門餐廳搜尋器 (v3.3 最終修正版)</title>
     <style>
         /* CSS 樣式維持不變 */
         body, html { height: 100%; margin: 0; font-family: 'Microsoft JhengHei', sans-serif; background: #f4f7f6; }
@@ -53,7 +53,7 @@
 
 <div class="main-container">
     <div class="search-section">
-        <h2>🚀 熱門餐廳搜尋器 (v3.2 幾何運算版)</h2>
+        <h2>🚀 熱門餐廳搜尋器 (v3.3 完美版)</h2>
         <div class="search-box">
             <input type="text" id="address" placeholder="輸入地點 (例: 新光三越, 台北車站)">
             <button onclick="runSearch()">搜尋</button>
@@ -77,14 +77,14 @@
 </script>
 
 <script>
-    // 官方 Loader：加入 geometry 函式庫以計算座標
+    // 官方 Loader
     (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
         key: MY_API_KEY,
         v: "weekly"
     });
 
     let map;
-    let Place, AdvancedMarkerElement, GeometryLib;
+    let Place, AdvancedMarkerElement;
 
     async function initApp() {
         if(!MY_API_KEY || MY_API_KEY.includes("在此處")) {
@@ -95,8 +95,6 @@
             const mapsLib = await google.maps.importLibrary("maps");
             const placesLib = await google.maps.importLibrary("places");
             const markerLib = await google.maps.importLibrary("marker");
-            // 🔥 載入幾何庫，用於計算範圍 🔥
-            GeometryLib = await google.maps.importLibrary("geometry");
 
             Place = placesLib.Place;
             AdvancedMarkerElement = markerLib.AdvancedMarkerElement;
@@ -157,23 +155,15 @@
             });
             currentMarkers.push(centerMarker);
 
-            // 🔥 關鍵修正：計算方形邊界 (Bounds) 🔥
-            // JS API 的 searchNearby 目前只吃 Bounds 不吃 Circle
-            // 我們利用 computeOffset 計算出 東北角(45度) 和 西南角(225度) 的座標
-            // 距離設為 4500 公尺 (3000 * 1.5) 以確保能覆蓋原本的 3公里圓形
-            const radius = 3000; 
-            const dist = radius * 1.414; // 對角線長度，確保方形包住圓形
-            
-            const northEast = GeometryLib.spherical.computeOffset(locationCoords, dist, 45);
-            const southWest = GeometryLib.spherical.computeOffset(locationCoords, dist, 225);
-            
-            const bounds = new google.maps.LatLngBounds(southWest, northEast);
-
-            // 2. 搜尋周邊餐廳
+            // 2. 搜尋周邊餐廳 (🔥 修正點在此 🔥)
+            // 不使用 'circle' 包裹，直接傳入 center 和 radius
             const { places: restaurantResults } = await Place.searchNearby({
                 fields: ['displayName', 'location', 'rating', 'userRatingCount', 'formattedAddress'],
-                // 👇 使用 LatLngBounds (方形範圍)
-                locationRestriction: bounds, 
+                // 👇 正確寫法：直接給物件 👇
+                locationRestriction: {
+                    center: locationCoords,
+                    radius: 3000
+                },
                 includedPrimaryTypes: ['restaurant'],
                 maxResultCount: 20
             });
